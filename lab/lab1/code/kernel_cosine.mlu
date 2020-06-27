@@ -1,0 +1,44 @@
+#include "mlu.h"
+#include "marco.h"
+#define EPS 0.0001
+
+__mlu_entry__ void CosineKernel(half* inputX, half* inputY, half* output)
+{
+    __nram__ half inputx_nram[N];
+    __nram__ half inputy_nram[N];
+    __nram__ half output_nram[N];
+    __nram__ half temp1_nram[N];
+    __nram__ half temp2_nram[N];
+    __nram__ half sumx_nram[N];
+    __nram__ half sumy_nram[N];
+    __nram__ half addelement_nram[N];
+
+    __nramset_half(output_nram,N,0.0);
+    __nramset_half(temp1_nram,N,0.0);
+    __nramset_half(sumx_nram,N,0.0);
+    __nramset_half(sumy_nram,N,0.0);
+    __nramset_half(addelement_nram,N,EPS);
+
+    for(int i=0;i<N;i++){
+        __memcpy(inputx_nram,inputX + i*M,M*sizeof(half),GDRAM2NRAM);
+        __memcpy(inputy_nram,inputY + i*M,M*sizeof(half),GDRAM2NRAM);
+
+        __bang_mul(temp2_nram,inputx_nram,inputy_nram,N);
+        __bang_add(temp1_nram,temp1_nram,temp2_nram,N);
+        __bang_mul(inputx_nram,inputx_nram,inputx_nram,N);
+        __bang_mul(inputy_nram,inputy_nram,inputy_nram,N);
+        __bang_add(sumx_nram,sumx_nram,inputx_nram,N);
+        __bang_add(sumy_nram,sumy_nram,inputy_nram,N);
+    }
+    __bang_add(sumx_nram,sumx_nram,addelement_nram,N);
+    __bang_add(sumy_nram,sumy_nram,addelement_nram,N);
+    __bang_active_sqrt(sumx_nram,sumx_nram,N);
+    __bang_active_sqrt(sumy_nram,sumy_nram,N);
+    __bang_mul(output_nram,sumx_nram,sumy_nram,N);
+    __bang_active_recip(output_nram,output_nram,M);
+    __bang_mul(output_nram,temp1_nram,output_nram,M);
+    __memcpy(output,output_nram,M*sizeof(half),NRAM2GDRAM);
+}
+
+
+
